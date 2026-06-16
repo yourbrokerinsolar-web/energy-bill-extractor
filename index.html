@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BillGraph kWh Reader</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Electric bill graph reader</p>
+            <h1>Annual energy snapshot</h1>
+          </div>
+          <div class="toolbar" aria-label="Bill input tools">
+            <label class="icon-button" title="Upload bill image">
+              <input id="fileInput" type="file" accept="image/*,.pdf" />
+              <span aria-hidden="true">+</span>
+              <span class="sr-only">Upload bill image</span>
+            </label>
+            <button class="icon-button" id="cameraButton" type="button" title="Use camera">
+              <span aria-hidden="true">◉</span>
+              <span class="sr-only">Use camera</span>
+            </button>
+            <button class="text-button" id="demoButton" type="button">Demo</button>
+          </div>
+        </header>
+
+        <div class="capture-strip" id="cameraPanel" hidden>
+          <video id="cameraPreview" playsinline autoplay muted></video>
+          <div class="capture-actions">
+            <button class="primary" id="captureButton" type="button">Capture</button>
+            <button class="secondary" id="stopCameraButton" type="button">Close</button>
+          </div>
+        </div>
+
+        <section class="reader-grid">
+          <div class="scan-area">
+            <div class="canvas-wrap">
+              <canvas id="imageCanvas" width="920" height="620" aria-label="Bill image analysis canvas"></canvas>
+              <div class="empty-state" id="emptyState">
+                <strong>Add a bill image</strong>
+                <span>Upload, use the camera, or load the demo graph.</span>
+              </div>
+            </div>
+            <div class="crop-tools">
+              <button class="secondary" id="fitButton" type="button">Find graph</button>
+              <button class="primary" id="extractButton" type="button">Extract 12 months</button>
+            </div>
+          </div>
+
+          <aside class="control-panel">
+            <div class="field-grid">
+              <label>
+                <span>Top of graph</span>
+                <input id="maxKwhInput" type="number" min="1" step="1" value="1200" />
+              </label>
+              <label>
+                <span>Rate per kWh</span>
+                <input id="rateInput" type="number" min="0" step="0.001" value="0.185" />
+              </label>
+            </div>
+
+            <div class="status-row">
+              <span id="statusDot" class="status-dot"></span>
+              <span id="statusText">Waiting for a bill image</span>
+            </div>
+
+            <div class="months-panel">
+              <div class="panel-heading">
+                <h2>Monthly kWh</h2>
+                <button class="ghost" id="clearButton" type="button">Clear</button>
+              </div>
+              <div id="monthInputs" class="month-inputs"></div>
+            </div>
+          </aside>
+        </section>
+      </section>
+
+      <section class="summary-band">
+        <div class="metric">
+          <span>Annual kWh</span>
+          <strong id="annualKwh">0</strong>
+        </div>
+        <div class="metric">
+          <span>Annual cost</span>
+          <strong id="annualCost">$0</strong>
+        </div>
+        <div class="metric">
+          <span>Avg monthly</span>
+          <strong id="avgMonthly">$0</strong>
+        </div>
+        <button class="primary" id="downloadButton" type="button">Download PNG</button>
+      </section>
+
+      <section class="report-preview">
+        <canvas id="reportCanvas" width="1200" height="675" aria-label="Annual energy report image"></canvas>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
