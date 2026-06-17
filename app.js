@@ -21,6 +21,7 @@ const fileInput = document.querySelector("#fileInput");
 const emptyState = document.querySelector("#emptyState");
 const maxKwhInput = document.querySelector("#maxKwhInput");
 const rateInput = document.querySelector("#rateInput");
+const utilitySelect = document.querySelector("#utilitySelect");
 const statusDot = document.querySelector("#statusDot");
 const statusText = document.querySelector("#statusText");
 const monthInputs = document.querySelector("#monthInputs");
@@ -496,8 +497,12 @@ function captureFrame() {
 }
 
 function downloadReport() {
+  const utilitySlug = utilitySelect?.value
+    ? utilitySelect.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+    : "annual-energy-snapshot";
+  const filename = `${utilitySlug || "annual-energy-snapshot"}-${new Date().toISOString().slice(0, 10)}.png`;
   const link = document.createElement("a");
-  link.download = "annual-energy-snapshot.png";
+  link.download = filename;
   link.href = reportCanvas.toDataURL("image/png");
   link.click();
 }
