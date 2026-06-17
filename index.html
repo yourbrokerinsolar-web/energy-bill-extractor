@@ -1,42 +1,105 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <meta http-equiv="Content-Style-Type" content="text/css">
-  <title></title>
-  <meta name="Generator" content="Cocoa HTML Writer">
-  <meta name="CocoaVersion" content="2299.77">
-  <style type="text/css">
-    p.p1 {margin: 0.0px 0.0px 12.0px 0.0px; font: 12.0px Times; -webkit-text-stroke: #000000}
-    p.p3 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Times; -webkit-text-stroke: #000000}
-    p.p4 {margin: 0.0px 0.0px 0.0px 0.0px; font: 11.0px 'Helvetica Neue'; color: #000000; color: rgba(0, 0, 0, 0.85); -webkit-text-stroke: rgba(0, 0, 0, 0.85)}
-    p.p5 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Times; -webkit-text-stroke: #000000; min-height: 14.0px}
-    span.s1 {font-kerning: none}
-    span.s2 {font: 11.0px 'Hiragino Sans'; font-kerning: none; color: rgba(0, 0, 0, 0.85); background-color: #b3b3b3; -webkit-text-stroke: 0px rgba(0, 0, 0, 0.85)}
-    span.s3 {font: 11.0px 'Helvetica Neue'; font-kerning: none; color: rgba(0, 0, 0, 0.85); background-color: #b3b3b3; -webkit-text-stroke: 0px rgba(0, 0, 0, 0.85)}
-    span.s4 {font-kerning: none; background-color: #b3b3b3}
-    span.s5 {font: 12.0px Times; font-kerning: none; color: #000000; -webkit-text-stroke: 0px #000000}
-  </style>
-</head>
-<body>
-<p class="p1"><span class="s1">Electric bill graph reader</span></p>
-<h1 style="margin: 0.0px 0.0px 14.9px 0.0px; font: 18.0px Times; -webkit-text-stroke: #000000"><span class="s1"><b>Annual energy snapshot</b></span></h1>
-<p class="p3"><span class="s1">+ Upload bill image </span><span class="s2">◉</span><span class="s3"> Use camera Demo</span></p>
-<p class="p3"><span class="s1"><b>Add a bill image</b> Upload, use the camera, or load the demo graph.</span></p>
-<p class="p3"><label for="utilitySelect"><span class="s1">Utility:</span> <select id="utilitySelect"><option value="">Select utility</option><option value="Ambit Energy">Ambit Energy</option><option value="ACE">ACE</option><option value="Baltimore Gas & Electric">Baltimore Gas & Electric</option><option value="Con Ed">Con Ed</option><option value="Gateway Energy Services">Gateway Energy Services</option><option value="JCPL">JCPL</option><option value="Madison Electric Development">Madison Electric Development</option><option value="Metropolitan Edison Co">Metropolitan Edison Co</option><option value="Northeast Utilities">Northeast Utilities</option><option value="NYSEG">NYSEG</option><option value="Orange Rockland">Orange Rockland</option><option value="Pacific Gas Electric">Pacific Gas Electric</option><option value="Park Ridge">Park Ridge</option><option value="Peco">Peco</option><option value="PPL">PPL</option><option value="Public Service Electric & Gas Co">Public Service Electric & Gas Co</option><option value="Sussex Rural Electric Cooperative">Sussex Rural Electric Cooperative</option><option value="Other">Other</option></select></label></p>
-<p class="p4"><span class="s4">Find graph</span><span class="s5"> </span><span class="s4">Extract 12 months</span></p>
-<p class="p3"><span class="s1">Top of graph Rate per kWh</span></p>
-<p class="p3"><label><input id="dailyAxis" type="checkbox"> Auto-detect daily axis values and convert to monthly totals</label></p>
-<p class="p3"><span class="s1">Waiting for a bill image</span></p>
-<h2 style="margin: 0.0px 0.0px 14.9px 0.0px; font: 18.0px Times; -webkit-text-stroke: #000000"><span class="s1"><b>Monthly kWh</b></span></h2>
-<p id="referenceMonth" class="p3"><span class="s1">Reference: </span></p>
-<p class="p4"><span class="s4">Clear</span></p>
-<p class="p5"><span class="s1"></span><br></p>
-<p class="p3"><span class="s1">Annual kWh <b>0</b></span></p>
-<p class="p3"><span class="s1">Annual cost <b>$0</b></span></p>
-<p class="p3"><span class="s1">Avg monthly <b>$0</b></span></p>
-<p class="p4"><span class="s4">Download PNG</span></p>
-<p class="p5"><span class="s1"></span><br></p>
-<p class="p3"><span class="s1">&lt;script type="module" src="app.js"&gt;&lt;/script&gt;</span></p>
-</body>
-</html><script type="module" src="app.js"></script>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BillGraph kWh Reader</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Electric bill graph reader</p>
+            <h1>Annual energy snapshot</h1>
+          </div>
+          <div class="toolbar" aria-label="Bill input tools">
+            <label class="icon-button" title="Upload bill image">
+              <input id="fileInput" type="file" accept="image/*,.pdf" />
+              <span aria-hidden="true">+</span>
+              <span class="sr-only">Upload bill image</span>
+            </label>
+            <button class="icon-button" id="cameraButton" type="button" title="Use camera">
+              <span aria-hidden="true">◉</span>
+              <span class="sr-only">Use camera</span>
+            </button>
+            <button class="text-button" id="demoButton" type="button">Demo</button>
+          </div>
+        </header>
+
+        <div class="capture-strip" id="cameraPanel" hidden>
+          <video id="cameraPreview" playsinline autoplay muted></video>
+          <div class="capture-actions">
+            <button class="primary" id="captureButton" type="button">Capture</button>
+            <button class="secondary" id="stopCameraButton" type="button">Close</button>
+          </div>
+        </div>
+
+        <section class="reader-grid">
+          <div class="scan-area">
+            <div class="canvas-wrap">
+              <canvas id="imageCanvas" width="920" height="620" aria-label="Bill image analysis canvas"></canvas>
+              <div class="empty-state" id="emptyState">
+                <strong>Add a bill image</strong>
+                <span>Upload, use the camera, or load the demo graph.</span>
+              </div>
+            </div>
+            <div class="crop-tools">
+              <button class="secondary" id="fitButton" type="button">Find graph</button>
+              <button class="primary" id="extractButton" type="button">Extract 12 months</button>
+            </div>
+          </div>
+
+          <aside class="control-panel">
+            <div class="field-grid">
+              <label>
+                <span>Top of graph</span>
+                <input id="maxKwhInput" type="number" min="1" step="1" value="1200" />
+              </label>
+              <label>
+                <span>Rate per kWh</span>
+                <input id="rateInput" type="number" min="0" step="0.001" value="0.185" />
+              </label>
+            </div>
+
+            <div class="status-row">
+              <span id="statusDot" class="status-dot"></span>
+              <span id="statusText">Waiting for a bill image</span>
+            </div>
+
+            <div class="months-panel">
+              <div class="panel-heading">
+                <h2>Monthly kWh</h2>
+                <button class="ghost" id="clearButton" type="button">Clear</button>
+              </div>
+              <div id="monthInputs" class="month-inputs"></div>
+            </div>
+          </aside>
+        </section>
+      </section>
+
+      <section class="summary-band">
+        <div class="metric">
+          <span>Annual kWh</span>
+          <strong id="annualKwh">0</strong>
+        </div>
+        <div class="metric">
+          <span>Annual cost</span>
+          <strong id="annualCost">$0</strong>
+        </div>
+        <div class="metric">
+          <span>Avg monthly</span>
+          <strong id="avgMonthly">$0</strong>
+        </div>
+        <button class="primary" id="downloadButton" type="button">Download PNG</button>
+      </section>
+
+      <section class="report-preview">
+        <canvas id="reportCanvas" width="1200" height="675" aria-label="Annual energy report image"></canvas>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

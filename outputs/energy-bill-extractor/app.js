@@ -3,25 +3,14 @@ import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
 
-function getLast12MonthsWithDates(refDate = new Date()) {
-  const items = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(refDate.getFullYear(), refDate.getMonth() - i, 1);
-    items.push({ label: d.toLocaleString("default", { month: "short" }), date: d });
-  }
-  return items;
-}
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const state = {
   image: null,
   crop: { x: 190, y: 130, w: 560, h: 330 },
-  // rawValues: the extracted value from the graph (units as on the axis)
-  rawValues: Array(12).fill(0),
-  // values: the displayed monthly totals (after conversion if needed)
   values: Array(12).fill(0),
   dragging: null,
-  stream: null,
-  dailyAxisManual: false
+  stream: null
 };
 
 const imageCanvas = document.querySelector("#imageCanvas");
@@ -37,7 +26,6 @@ const statusText = document.querySelector("#statusText");
 const monthInputs = document.querySelector("#monthInputs");
 const cameraPanel = document.querySelector("#cameraPanel");
 const cameraPreview = document.querySelector("#cameraPreview");
-const utilitySelect = document.querySelector("#utilitySelect");
 
 function money(value) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
@@ -63,13 +51,12 @@ function setStatus(text, mode = "pending") {
 
 function makeMonthInputs() {
   monthInputs.innerHTML = "";
-  const months = getLast12MonthsWithDates();
-  months.forEach((month, index) => {
+  MONTHS.forEach((month, index) => {
     const cell = document.createElement("div");
     cell.className = "month-cell";
     cell.innerHTML = `
       <label>
-        <span>${month.label}</span>
+        <span>${month}</span>
         <input type="number" min="0" step="1" inputmode="numeric" value="${state.values[index]}" data-month="${index}">
       </label>
     `;
@@ -80,64 +67,6 @@ function makeMonthInputs() {
 function updateMonthInputs() {
   monthInputs.querySelectorAll("input").forEach((input, index) => {
     input.value = state.values[index];
-  });
-}
-
-function detectDailyAxis() {
-  const months = getLast12MonthsWithDates();
-  const raw = state.rawValues.map((v) => Number(v || 0));
-  const maxKwh = Number(maxKwhInput?.value || 0);
-  const totalRaw = raw.reduce((sum, value) => sum + value, 0);
-  const avgRaw = totalRaw / 12;
-  const dailyCandidate = raw.reduce((sum, value, index) => {
-    const d = months[index]?.date;
-    const days = d ? new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() : 30;
-    return sum + value * days;
-  }, 0);
-  if (!maxKwh || !raw.some((v) => v > 0)) return false;
-
-  // If the top of the graph is low and the bar values are small,
-  // the axis is likely daily rather than monthly.
-  if (maxKwh <= 80 && avgRaw <= 30) return true;
-  if (maxKwh <= 100 && avgRaw <= 20 && dailyCandidate >= 800) return true;
-
-  const ratio = dailyCandidate / Math.max(1, totalRaw);
-  if (ratio > 4 && totalRaw < 1200 && dailyCandidate >= 1000) return true;
-
-  return false;
-}
-
-function computeDisplayedValues() {
-  const months = getLast12MonthsWithDates();
-  const dailyAxisCheckbox = document.querySelector('#dailyAxis');
-  let daily = dailyAxisCheckbox?.checked;
-  if (!state.dailyAxisManual) {
-    daily = detectDailyAxis();
-    if (dailyAxisCheckbox) {
-      dailyAxisCheckbox.checked = daily;
-    }
-  }
-
-  state.values = state.rawValues.map((v, i) => {
-    const base = Number(v || 0);
-    if (daily && months[i] && months[i].date) {
-      const d = months[i].date;
-      const days = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      return Math.round(base * days);
-    }
-    return Math.round(base);
-  });
-  updateMonthInputs();
-  updateTotals();
-}
-
-// wire the checkbox if present
-const dailyAxisCheckbox = document.querySelector('#dailyAxis');
-if (dailyAxisCheckbox) {
-  dailyAxisCheckbox.addEventListener('change', () => {
-    state.dailyAxisManual = true;
-    computeDisplayedValues();
-    setStatus('Display updated for daily-axis conversion.', 'ready');
   });
 }
 
@@ -222,10 +151,10 @@ function findGraphArea() {
   setStatus("Graph area selected. Drag the gold box to fine tune.", "ready");
 }
 
-function loadImageFromFile(file) {
+async function loadImageFromFile(file) {
   if (!file) return;
   if (file.type === "application/pdf") {
-    setStatus("PDF preview is not available in this offline prototype. Save the bill page as an image first.", "warn");
+    await loadPdfFromFile(file);
     return;
   }
   const url = URL.createObjectURL(file);
@@ -237,12 +166,35 @@ function loadImageFromFile(file) {
   img.src = url;
 }
 
+async function loadPdfFromFile(file) {
+  try {
+    setStatus("Rendering PDF page...", "pending");
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    await page.render({
+      canvasContext: canvas.getContext("2d"),
+      viewport
+    }).promise;
+
+    const img = new Image();
+    img.onload = () => {
+      setImage(img);
+      setStatus(`PDF page 1 loaded from ${pdf.numPages} page${pdf.numPages === 1 ? "" : "s"}.`, "ready");
+    };
+    img.src = canvas.toDataURL("image/png");
+  } catch (error) {
+    setStatus("Could not render that PDF. Try another bill file or export the bill page as an image.", "warn");
+  }
+}
+
 function setImage(img) {
   state.image = img;
-  state.dailyAxisManual = false;
-  if (dailyAxisCheckbox) {
-    dailyAxisCheckbox.checked = false;
-  }
   drawImageCanvas();
   findGraphArea();
   setStatus("Image loaded. Adjust the graph box, then extract.", "ready");
@@ -327,7 +279,7 @@ function extractBars() {
       .sort((a, b) => a.center - b.center);
   }
 
-  const extracted = picked.map((segment) => {
+  state.values = picked.map((segment) => {
     const sx = Math.max(0, Math.floor(segment.start));
     const ex = Math.min(width - 1, Math.ceil(segment.end));
     let top = height;
@@ -350,20 +302,14 @@ function extractBars() {
     return Math.round((barHeight / chartHeight) * maxKwh);
   });
 
-  state.rawValues = extracted;
-  computeDisplayedValues();
+  updateMonthInputs();
+  updateTotals();
   drawImageCanvas();
   setStatus("Extraction complete. Review the monthly values.", "ready");
 }
 
 function drawReport() {
   const { annualKwh, rate, annualCost, avgMonthly } = totals();
-  const months = getLast12MonthsWithDates();
-  const refEl = document.querySelector("#referenceMonth");
-  if (refEl && months.length) {
-    const ref = months[months.length - 1].date;
-    refEl.textContent = `Reference: ${ref.toLocaleString("default", { month: "long", year: "numeric" })}`;
-  }
   const w = reportCanvas.width;
   const h = reportCanvas.height;
   reportCtx.clearRect(0, 0, w, h);
@@ -379,8 +325,7 @@ function drawReport() {
   reportCtx.fillText("Annual energy snapshot", 58, 70);
   reportCtx.fillStyle = "rgba(255,255,255,0.68)";
   reportCtx.font = "600 22px Inter, system-ui, sans-serif";
-  const utility = utilitySelect?.value || "Unknown utility";
-  reportCtx.fillText(`${utility} · Based on 12 months at ${rateMoney(rate)} per kWh`, 58, 112);
+  reportCtx.fillText(`Based on 12 months at ${rateMoney(rate)} per kWh`, 58, 112);
 
   const cards = [
     ["Annual kWh", number(annualKwh), "#41b883"],
@@ -426,7 +371,7 @@ function drawReport() {
     reportCtx.fillStyle = "#68736f";
     reportCtx.font = "700 16px Inter, system-ui, sans-serif";
     reportCtx.textAlign = "center";
-    reportCtx.fillText(months[index].label, x + barW / 2, chart.y + chart.h + 30);
+    reportCtx.fillText(MONTHS[index], x + barW / 2, chart.y + chart.h + 30);
   });
   reportCtx.textAlign = "left";
   reportCtx.fillStyle = "#17231f";
@@ -481,7 +426,6 @@ function createDemo() {
   }
   const values = [650, 590, 520, 470, 540, 700, 910, 1020, 880, 690, 610, 735];
   const max = 1200;
-  const demoMonths = getLast12MonthsWithDates();
   values.forEach((value, index) => {
     const slot = plot.w / 12;
     const barW = slot * 0.52;
@@ -494,7 +438,7 @@ function createDemo() {
     ctx.fillStyle = "#68736f";
     ctx.font = "700 18px Inter, system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(demoMonths[index].label, x + barW / 2, plot.y + plot.h + 38);
+    ctx.fillText(MONTHS[index], x + barW / 2, plot.y + plot.h + 38);
   });
   ctx.textAlign = "left";
   ctx.fillStyle = "#68736f";
@@ -504,10 +448,6 @@ function createDemo() {
   const img = new Image();
   img.onload = () => {
     setImage(img);
-    state.dailyAxisManual = false;
-    if (dailyAxisCheckbox) {
-      dailyAxisCheckbox.checked = false;
-    }
     const b = state.imageBounds;
     state.crop = {
       x: b.x + (plot.x / demo.width) * b.w,
@@ -516,8 +456,9 @@ function createDemo() {
       h: (plot.h / demo.height) * b.h
     };
     drawImageCanvas();
-    state.rawValues = values;
-    computeDisplayedValues();
+    state.values = values;
+    updateMonthInputs();
+    updateTotals();
     setStatus("Demo loaded. Try moving the graph box or downloading the report.", "ready");
   };
   img.src = demo.toDataURL("image/png");
@@ -555,13 +496,8 @@ function captureFrame() {
 }
 
 function downloadReport() {
-  const utilName = utilitySelect?.value || "annual-energy-snapshot";
-  const safeName = utilName.replace(/[^a-zA-Z0-9-_ ]/g, "").replace(/\s+/g, "-").trim() || "annual-energy-snapshot";
-  const months = getLast12MonthsWithDates();
-  const ref = months.length ? months[months.length - 1].date : new Date();
-  const refLabel = ref.toLocaleString("default", { month: "short", year: "numeric" }).replace(/\s+/g, "-");
   const link = document.createElement("a");
-  link.download = `${safeName}-${refLabel}-annual-energy-snapshot.png`;
+  link.download = "annual-energy-snapshot.png";
   link.href = reportCanvas.toDataURL("image/png");
   link.click();
 }
@@ -618,37 +554,16 @@ document.querySelector("#fitButton").addEventListener("click", findGraphArea);
 document.querySelector("#extractButton").addEventListener("click", extractBars);
 document.querySelector("#downloadButton").addEventListener("click", downloadReport);
 document.querySelector("#clearButton").addEventListener("click", () => {
-  state.dailyAxisManual = false;
-  if (dailyAxisCheckbox) {
-    dailyAxisCheckbox.checked = false;
-  }
-  state.rawValues = Array(12).fill(0);
-  computeDisplayedValues();
+  state.values = Array(12).fill(0);
+  updateMonthInputs();
+  updateTotals();
   setStatus("Values cleared.", "pending");
 });
 
-if (utilitySelect) {
-  utilitySelect.addEventListener("change", () => {
-    updateTotals();
-    setStatus(`Selected utility: ${utilitySelect.value || "Unknown"}`, "ready");
-  });
-}
-
 monthInputs.addEventListener("input", (event) => {
   if (!event.target.matches("input")) return;
-  const idx = Number(event.target.dataset.month);
-  const val = Number(event.target.value || 0);
-  const daily = document.querySelector('#dailyAxis')?.checked;
-  // update rawValues accordingly so conversions remain consistent
-  if (daily) {
-    const months = getLast12MonthsWithDates();
-    const d = months[idx] && months[idx].date;
-    const days = d ? new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() : 30;
-    state.rawValues[idx] = Math.round(val / days);
-  } else {
-    state.rawValues[idx] = val;
-  }
-  computeDisplayedValues();
+  state.values[Number(event.target.dataset.month)] = Number(event.target.value || 0);
+  updateTotals();
 });
 
 [maxKwhInput, rateInput].forEach((input) => input.addEventListener("input", updateTotals));
