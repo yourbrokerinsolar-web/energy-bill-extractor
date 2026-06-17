@@ -219,87 +219,79 @@ function extractBars() {
   analysisCanvas.height = imageCanvas.height;
   const analysisCtx = analysisCanvas.getContext("2d", { willReadFrequently: true });
   const b = state.imageBounds;
-  analysisCtx.fillStyle = "#f8faf8";
-  analysisCtx.fillRect(0, 0, analysisCanvas.width, analysisCanvas.height);
   analysisCtx.drawImage(state.image, b.x, b.y, b.w, b.h);
 
-  const data = analysisCtx.getImageData(crop.x, crop.y, crop.w, crop.h);
-  const width = Math.floor(crop.w);
-  const height = Math.floor(crop.h);
-  const scores = new Array(width).fill(0);
+  const marginX = Math.max(2, Math.round(crop.w * 0.05));
+  const marginY = Math.max(2, Math.round(crop.h * 0.05));
+  const scanX = Math.floor(crop.x + marginX);
+  const scanY = Math.floor(crop.y + marginY);
+  const scanW = Math.max(1, Math.floor(crop.w - marginX * 2));
+  const scanH = Math.max(1, Math.floor(crop.h - marginY * 2));
+  const data = analysisCtx.getImageData(scanX, scanY, scanW, scanH);
 
-  for (let x = 0; x < width; x += 1) {
-    let active = 0;
-    for (let y = 0; y < height; y += 1) {
-      const index = (y * width + x) * 4;
-      const r = data.data[index];
-      const g = data.data[index + 1];
-      const bl = data.data[index + 2];
-      const brightness = (r + g + bl) / 3;
-      const saturation = Math.max(r, g, bl) - Math.min(r, g, bl);
-      if (brightness < 225 && saturation > 16) active += 1;
+  const isDark = (r, g, b) => {
+    const brightness = (r + g + b) / 3;
+    const saturation = Math.max(r, g, b) - Math.min(r, g, b);
+    return brightness < 225 && saturation > 16;
+  };
+
+  const findBaseline = () => {
+    const start = Math.floor(scanH * 0.60);
+    let bestY = scanH - 1;
+    let bestCount = 0;
+    for (let y = start; y < scanH; y += 1) {
+      let count = 0;
+      for (let x = 0; x < scanW; x += 1) {
+        const index = (y * scanW + x) * 4;
+        if (isDark(data.data[index], data.data[index + 1], data.data[index + 2])) count += 1;
+      }
+      if (count > bestCount) {
+        bestCount = count;
+        bestY = y;
+      }
     }
-    scores[x] = active;
-  }
+    return bestY;
+  };
 
-  const threshold = Math.max(4, height * 0.04);
-  let detectedBaseline = 0;
-  for (let x = 0; x < width; x += 1) {
-    for (let y = 0; y < height; y += 1) {
-      const index = (y * width + x) * 4;
-      const r = data.data[index];
-      const g = data.data[index + 1];
-      const bl = data.data[index + 2];
-      const brightness = (r + g + bl) / 3;
-      const saturation = Math.max(r, g, bl) - Math.min(r, g, bl);
-      if (brightness < 225 && saturation > 16) detectedBaseline = Math.max(detectedBaseline, y);
+  const findTopAxis = () => {
+    const end = Math.floor(scanH * 0.20);
+    let bestY = 0;
+    let bestCount = 0;
+    for (let y = 0; y <= end; y += 1) {
+      let count = 0;
+      for (let x = 0; x < scanW; x += 1) {
+        const index = (y * scanW + x) * 4;
+        if (isDark(data.data[index], data.data[index + 1], data.data[index + 2])) count += 1;
+      }
+      if (count > bestCount) {
+        bestCount = count;
+        bestY = y;
+      }
     }
-  }
-  const chartHeight = Math.max(1, detectedBaseline);
-  const segments = [];
-  let start = null;
-  for (let x = 0; x < width; x += 1) {
-    if (scores[x] > threshold && start === null) start = x;
-    if ((scores[x] <= threshold || x === width - 1) && start !== null) {
-      const end = x === width - 1 ? x : x - 1;
-      if (end - start > width * 0.012) segments.push({ start, end, center: (start + end) / 2 });
-      start = null;
-    }
-  }
+    return bestCount > scanW * 0.15 ? bestY : 0;
+  };
 
-  let picked = segments;
-  if (picked.length < 8 || picked.length > 18) {
-    picked = Array.from({ length: 12 }, (_, i) => {
-      const slot = width / 12;
-      return { start: i * slot + slot * 0.18, end: i * slot + slot * 0.82, center: i * slot + slot / 2 };
-    });
-  } else {
-    picked = picked
-      .sort((a, b) => b.end - b.start - (a.end - a.start))
-      .slice(0, 12)
-      .sort((a, b) => a.center - b.center);
-  }
+  const baseline = findBaseline();
+  const topAxis = findTopAxis();
+  const chartHeight = Math.max(1, baseline - topAxis);
+  const slotWidth = scanW / 12;
 
-  state.values = picked.map((segment) => {
-    const sx = Math.max(0, Math.floor(segment.start));
-    const ex = Math.min(width - 1, Math.ceil(segment.end));
-    let top = height;
-    let bottom = 0;
-    for (let x = sx; x <= ex; x += 1) {
-      for (let y = 0; y < height; y += 1) {
-        const index = (y * width + x) * 4;
-        const r = data.data[index];
-        const g = data.data[index + 1];
-        const bl = data.data[index + 2];
-        const brightness = (r + g + bl) / 3;
-        const saturation = Math.max(r, g, bl) - Math.min(r, g, bl);
-        if (brightness < 225 && saturation > 16) {
+  state.values = Array.from({ length: 12 }, (_, index) => {
+    const startX = Math.max(0, Math.floor(index * slotWidth + slotWidth * 0.12));
+    const endX = Math.min(scanW - 1, Math.ceil((index + 1) * slotWidth - slotWidth * 0.12));
+    let top = scanH;
+
+    for (let x = startX; x <= endX; x += 1) {
+      for (let y = 0; y < baseline; y += 1) {
+        const indexData = (y * scanW + x) * 4;
+        if (isDark(data.data[indexData], data.data[indexData + 1], data.data[indexData + 2])) {
           top = Math.min(top, y);
-          bottom = Math.max(bottom, y);
+          break;
         }
       }
     }
-    const barHeight = Math.max(0, bottom - top);
+
+    const barHeight = Math.max(0, baseline - top);
     return Math.round((barHeight / chartHeight) * maxKwh);
   });
 
