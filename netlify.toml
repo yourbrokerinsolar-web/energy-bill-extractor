@@ -1,0 +1,8 @@
+[build]
+  publish = "outputs/energy-bill-extractor"
+  command = ""
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Permissions-Policy = "camera=(self)"
